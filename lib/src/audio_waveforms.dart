@@ -68,12 +68,11 @@ class _AudioWaveformsState extends State<AudioWaveforms> {
         onHorizontalDragStart:
             widget.enableGesture ? _handleHorizontalDragStart : null,
         child: ClipPath(
-          clipper: WaveClipper(!widget.waveStyle.showDurationLabel
-              ? 0.0
-              : widget.waveStyle.extraClipperHeight ??
-                  (widget.waveStyle.durationLinesHeight +
-                      (widget.waveStyle.durationStyle.fontSize ??
-                          widget.waveStyle.durationLinesHeight))),
+          clipper: WaveClipper(
+            extraClipperHeight: _getExtraClipperHeight(),
+            waveWidth:
+                widget.waveStyle.waveThickness + widget.waveStyle.spacing,
+          ),
           child: RepaintBoundary(
             child: CustomPaint(
               size: widget.size,
@@ -120,6 +119,19 @@ class _AudioWaveformsState extends State<AudioWaveforms> {
         ),
       ),
     );
+  }
+
+  double _getExtraClipperHeight() {
+    if (widget.waveStyle.showDurationLabel) {
+      if (widget.waveStyle.extraClipperHeight != null) {
+        return widget.waveStyle.extraClipperHeight!;
+      }
+      return widget.waveStyle.durationLinesHeight +
+          (widget.waveStyle.durationStyle.fontSize ??
+              widget.waveStyle.durationLinesHeight);
+    } else {
+      return 0;
+    }
   }
 
   ///This handles scrolling of the wave
