@@ -45,10 +45,11 @@ class RecorderWavePainter extends CustomPainter {
   final double labelSpacing;
   final Shader? gradient;
   final bool shouldClearLabels;
-  final VoidCallback revertClearlabelCall;
+  final VoidCallback revertClearLabelCall;
   final Function(int) setCurrentPositionDuration;
   final bool shouldCalculateScrolledPosition;
   final double scaleFactor;
+  final Duration currentlyRecordedDuration;
 
   RecorderWavePainter({
     required this.waveData,
@@ -78,10 +79,11 @@ class RecorderWavePainter extends CustomPainter {
     required this.labelSpacing,
     required this.gradient,
     required this.shouldClearLabels,
-    required this.revertClearlabelCall,
+    required this.revertClearLabelCall,
     required this.setCurrentPositionDuration,
     required this.shouldCalculateScrolledPosition,
     required this.scaleFactor,
+    required this.currentlyRecordedDuration,
   })  : _wavePaint = Paint()
           ..color = waveColor
           ..strokeWidth = waveThickness
@@ -95,13 +97,14 @@ class RecorderWavePainter extends CustomPainter {
   var _labelPadding = 0.0;
 
   final List<Label> _labels = [];
+  static const durationBuffer = 5;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (shouldClearLabels) {
       _labels.clear();
       pushBack();
-      revertClearlabelCall();
+      revertClearLabelCall();
     }
     for (var i = 0; i < waveData.length; i++) {
       ///wave gradient
@@ -113,11 +116,8 @@ class RecorderWavePainter extends CustomPainter {
         pushBack();
       }
 
-      ///upper wave
-      if (showTop) _drawUpperWave(canvas, size, i);
-
-      ///lower wave
-      if (showBottom) _drawLowerWave(canvas, size, i);
+      ///draws waves
+      _drawWave(canvas, size, i);
 
       ///duration labels
       if (showDurationLabel) {
@@ -137,48 +137,48 @@ class RecorderWavePainter extends CustomPainter {
   bool shouldRepaint(RecorderWavePainter oldDelegate) => true;
 
   void _drawTextInRange(Canvas canvas, int i, Size size) {
-    if (_labels.isNotEmpty) {
+    if (_labels.isNotEmpty && i < _labels.length) {
+      final label = _labels[i];
+      final content = label.content;
+      final offset = label.offset;
+      final halfWidth = size.width / 2;
       final textSpan = TextSpan(
-        text: _labels[i].content,
+        text: content,
         style: durationStyle,
       );
 
-      if (_labels[i].offset.dx > -size.width / 2 &&
-          _labels[i].offset.dx < size.width + size.width / 2) {
+      if (offset.dx > -halfWidth && offset.dx < halfWidth * 3) {
         final textPainter = TextPainter(
           text: textSpan,
           textDirection: TextDirection.ltr,
         );
-
-        textPainter.layout(minWidth: 0, maxWidth: size.width);
-        textPainter.paint(
-          canvas,
-          _labels[i].offset,
-        );
+        textPainter.layout(minWidth: 0, maxWidth: halfWidth * 2);
+        textPainter.paint(canvas, offset);
       }
     }
   }
 
   void _addLabel(Canvas canvas, int i, Size size) {
-    canvas.drawLine(
-        Offset(
-            _labelPadding + dragOffset.dx - totalBackDistance.dx, size.height),
-        Offset(_labelPadding + dragOffset.dx - totalBackDistance.dx,
-            size.height + durationLinesHeight),
-        _durationLinePaint);
-    _labels.add(
-      Label(
-        content: showHourInDuration
-            ? Duration(seconds: i).toHHMMSS()
-            : Duration(seconds: i).inSeconds.toMMSS(),
-        offset: Offset(
-            _labelPadding +
-                dragOffset.dx -
-                totalBackDistance.dx -
-                durationTextPadding,
-            size.height + labelSpacing),
-      ),
-    );
+    final labelDuration = Duration(seconds: i);
+    final durationLineDx = _labelPadding + dragOffset.dx - totalBackDistance.dx;
+
+    if (labelDuration <
+        Duration(
+            seconds: currentlyRecordedDuration.inSeconds + durationBuffer)) {
+      canvas.drawLine(
+          Offset(durationLineDx, size.height),
+          Offset(durationLineDx, size.height + durationLinesHeight),
+          _durationLinePaint);
+      _labels.add(
+        Label(
+          content: showHourInDuration
+              ? labelDuration.toHHMMSS()
+              : labelDuration.inSeconds.toMMSS(),
+          offset: Offset(
+              durationLineDx - durationTextPadding, size.height + labelSpacing),
+        ),
+      );
+    }
     _labelPadding += spacing * updateFrequecy;
   }
 
@@ -190,38 +190,19 @@ class RecorderWavePainter extends CustomPainter {
     );
   }
 
-  void _drawUpperWave(Canvas canvas, Size size, int i) {
-    canvas.drawLine(
-        Offset(
-            -totalBackDistance.dx +
-                dragOffset.dx +
-                (spacing * i) -
-                initialPosition,
-            size.height - bottomPadding),
-        Offset(
-            -totalBackDistance.dx +
-                dragOffset.dx +
-                (spacing * i) -
-                initialPosition,
-            -(waveData[i] * scaleFactor) + size.height - bottomPadding),
-        _wavePaint);
-  }
-
-  void _drawLowerWave(Canvas canvas, Size size, int i) {
-    canvas.drawLine(
-        Offset(
-            -totalBackDistance.dx +
-                dragOffset.dx +
-                (spacing * i) -
-                initialPosition,
-            size.height - bottomPadding),
-        Offset(
-            -totalBackDistance.dx +
-                dragOffset.dx +
-                (spacing * i) -
-                initialPosition,
-            (waveData[i] * scaleFactor) + size.height - bottomPadding),
-        _wavePaint);
+  void _drawWave(Canvas canvas, Size size, int i) {
+    final halfWidth = size.width / 2;
+    final dx =
+        -totalBackDistance.dx + dragOffset.dx + (spacing * i) - initialPosition;
+    final upperDy = (size.height) -
+        (showTop ? (waveData[i] * scaleFactor) : 0) -
+        bottomPadding;
+    final lowerDy = size.height +
+        (showBottom ? waveData[i] * scaleFactor : 0) -
+        bottomPadding;
+    if (dx > -halfWidth && dx < halfWidth * 2) {
+      canvas.drawLine(Offset(dx, upperDy), Offset(dx, lowerDy), _wavePaint);
+    }
   }
 
   void _waveGradient() {
