@@ -389,7 +389,7 @@ class _AudioFileWaveformsState extends State<AudioFileWaveforms>
       _dragOffset = Offset.zero;
     }
     _cachedAudioProgress = _audioProgress;
-    WidgetsBinding!.instance!.addPostFrameCallback((_) {
+    WidgetsBinding.instance?.addPostFrameCallback((_) {
       if (mounted) {
         setState(() {});
       }
